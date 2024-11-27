@@ -1,46 +1,59 @@
 import numpy as np
-from scipy.sparse import spdiags, eye
+from scipy.sparse import spdiags
+import matplotlib.pyplot as plt
 
-# Parameters
-n = 8  # Number of points
-L = 20  # Domain length (from -10 to 10, so length is 20)
-dx = L / n  # Grid spacing
+m = 8   # N value in x and y directions
+n = m * m  # total size of matrix
 
-# Generate the matrix A for the Laplacian (second derivatives in x and y)
-e = np.ones(n)
-A_x = spdiags([e, -4*e, e], [-1, 0, 1], n, n) / dx**2
-A_y = spdiags([e, -4*e, e], [-1, 0, 1], n, n) / dx**2
+x = np.linspace(-10, 10, m+1)
+x = x[:m]
+dx = x[1] - x[0]
 
-# Enforce periodic boundary conditions
-A_x = A_x.tolil()
-A_y = A_y.tolil()
-A_x[0, -1] = 1 / dx**2
-A_x[-1, 0] = 1 / dx**2
-A_y[0, -1] = 1 / dx**2
-A_y[-1, 0] = 1 / dx**2
+e0 = np.zeros((n, 1))  # vector of zeros
+e1 = np.ones((n, 1))   # vector of ones
+e2 = np.copy(e1)    # copy the one vector
+e4 = np.copy(e0)    # copy the zero vector
 
-# Convert to CSR format for efficient arithmetic operations
-A_x = A_x.tocsr()
-A_y = A_y.tocsr()
+for j in range(1, m+1):
+    e2[m*j-1] = 0  # overwrite every m^th value with zero
+    e4[m*j-1] = 1  # overwirte every m^th value with one
 
-# Matrix A is the sum of A_x and A_y (discrete Laplacian operator)
-A = A_x + A_y
+# Shift to correct positions
+e3 = np.zeros_like(e2)
+e3[1:n] = e2[0:n-1]
+e3[0] = e2[n-1]
 
-# Generate the matrix B for the first derivative with respect to x
-B = spdiags([-e, e], [-1, 1], n, n) / (2 * dx)
-B = B.tolil()
-B[0, -1] = -1 / (2 * dx)
-B[-1, 0] = 1 / (2 * dx)
-B = B.tocsr()
+e5 = np.zeros_like(e4)
+e5[1:n] = e4[0:n-1]
+e5[0] = e4[n-1]
 
-# Generate the matrix C for the first derivative with respect to y
-C = spdiags([-e, e], [-1, 1], n, n) / (2 * dx)
-C = C.tolil()
-C[0, -1] = -1 / (2 * dx)
-C[-1, 0] = 1 / (2 * dx)
-C = C.tocsr()
+# Place diagonal elements
+diagonals_A = [e1.flatten(), e1.flatten(), e5.flatten(),
+             e2.flatten(), -4 * e1.flatten(), e3.flatten(),
+             e4.flatten(), e1.flatten(), e1.flatten()]
+offsets_A = [-(n-m), -m, -m+1, -1, 0, 1, m-1, m, (n-m)]
+matA = spdiags(diagonals_A, offsets_A, n, n).toarray() / dx**2
+A1 = matA
 
-# Print the matrices
-print("Matrix A (Laplacian):\n", A.toarray())
-print("Matrix B (d/dx):\n", B.toarray())
-print("Matrix C (d/dy):\n", C.toarray())
+diagonals_B = [e1.flatten(), -e1.flatten(), e1.flatten(), -e1.flatten()]
+offsets_B = [-(n-m), -m, m, (n-m)]
+matB = spdiags(diagonals_B, offsets_B, n, n).toarray() / (2*dx)
+A2 = matB
+
+diagonals_C = [e5.flatten(), -e2.flatten(), e3.flatten(), -e4.flatten()]
+offsets_C = [-m+1, -1, 1, m-1]
+matC = spdiags(diagonals_C, offsets_C, n, n).toarray() / (2*dx)
+A3 = matC
+
+# Plot matrix structure
+plt.spy(matA)
+plt.title('Matrix Structure_A')
+plt.show()
+
+plt.spy(matB)
+plt.title('Matrix Structure_B')
+plt.show()
+
+plt.spy(matC)
+plt.title('Matrix Structure_C')
+plt.show()
